@@ -248,6 +248,478 @@
 <!-- 注入脚本 -->
 
 <script>
+    function createUpgradeButton(config) {
+        // 默认配置
+        const defaultConfig = {
+            paymentPlatform: '',
+            paymentType: 'donation', // 'donation' or shop
+            buttonText: 'Upgrade to Pro',
+            iframeUrl: '',
+            paymentName: '',
+            needLogin: 'true',
+            size: 'default', // 'small' or 'default'
+            container: document.body // 默认添加到 body
+        };
+
+        const finalConfig = { ...defaultConfig, ...config };
+
+        // 创建按钮
+        const button = document.createElement('button');
+        button.className = finalConfig.size === 'small' ? 'vpadmin-pro-button-small' : 'vpadmin-pro-button';
+        button.innerHTML = `<span class="${finalConfig.size === 'small' ? 'vpadmin-pro-text-small' : 'vpadmin-pro-text'}">${finalConfig.buttonText}</span>`;
+
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.className = 'vpadmin-pro-dialog';
+        dialog.style.display = 'none';
+        dialog.innerHTML = `
+                <div class="vpadmin-pro-dialog-content">
+                    <div class="vpadmin-pro-dialog-header">
+                        <h3  id="proDialogTitle">Upgrade to Pro</h3>
+                        <button class="vpadmin-pro-dialog-close">&times;</button>
+                    </div>
+                    <div class="vpadmin-pro-dialog-body">
+                        <div class="vpadmin-iframe-container">
+                            <div id="loadingOverlay" class="vpadmin-loading-overlay">
+                                <div class="vpadmin-loading-spinner"></div>
+                            </div>
+                            <iframe id="paymentIframe" class="vpadmin-pro-iframe"></iframe>
+                        </div>
+                    </div>
+                </div>
+            `;
+        dialog.querySelector('#proDialogTitle').textContent = finalConfig.buttonText;
+
+        // 添加样式
+        const style = document.createElement('style');
+        style.textContent = `
+                .vpadmin-pro-button {
+                    background: linear-gradient(135deg, #ff6b6b, #ff4757);
+                    border: none;
+                    padding: 2px 8px;
+                    border-radius: 6px;
+                    transition: all 0.3s ease;
+                    cursor: pointer;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .vpadmin-pro-button:hover {
+                    background: linear-gradient(135deg, #ff4757, #ff3e4d);
+                    box-shadow: 0 4px 6px rgba(255, 71, 87, 0.3);
+                    transform: translateY(-1px);
+                }
+
+                .vpadmin-pro-button-small {
+                    background: linear-gradient(135deg, #ff6b6b, #ff4757);
+                    border: none;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    transition: all 0.3s ease;
+                    cursor: pointer;
+                    font-size: 12px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .vpadmin-pro-button-small:hover {
+                    background: linear-gradient(135deg, #ff4757, #ff3e4d);
+                    box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+                    transform: translateY(-1px);
+                }
+
+                .vpadmin-pro-text {
+                    color: white;
+                    font-weight: 600;
+                    font-size: 14px;
+                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                }
+
+                .vpadmin-pro-text-small {
+                    color: white;
+                    font-weight: 500;
+                    font-size: 12px;
+                    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+                }
+
+                .vpadmin-pro-dialog {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    z-index: 10000;
+                    display: none;
+                }
+
+                .vpadmin-pro-dialog-content {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background-color: white;
+                    border-radius: 8px;
+                    width: 90%;
+                    max-width: 600px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                }
+
+                .vpadmin-pro-dialog-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 16px 20px;
+                    border-bottom: 1px solid #eee;
+                }
+
+                .vpadmin-pro-dialog-header h3 {
+                    margin: 0;
+                    font-size: 18px;
+                    color: #333;
+                }
+
+                .vpadmin-pro-dialog-close {
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    color: #666;
+                    cursor: pointer;
+                    padding: 0 8px;
+                    transition: color 0.3s;
+                }
+
+                .vpadmin-pro-dialog-close:hover {
+                    color: #ff4757;
+                }
+
+                .vpadmin-pro-dialog-body {
+                    padding: 20px;
+                }
+
+                .vpadmin-iframe-container {
+                    position: relative;
+                    width: 100%;
+                    height: 500px;
+                    border-radius: 4px;
+                    overflow: hidden;
+                }
+
+                .vpadmin-pro-iframe {
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                }
+
+                .vpadmin-loading-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(255, 255, 255, 0.8);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                }
+
+                .vpadmin-loading-spinner {
+                    border: 5px solid #f3f3f3;
+                    border-top: 5px solid #3498db;
+                    border-radius: 50%;
+                    width: 50px;
+                    height: 50px;
+                    animation: spin 1s linear infinite;
+                }
+
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+
+                .vpadmin-user-guide {
+                    background-color: #f8f9fa;
+                    padding: 12px 16px;
+                    border-radius: 6px;
+                    margin-bottom: 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+
+                .vpadmin-user-guide span {
+                    color: #666;
+                    font-size: 14px;
+                }
+
+                #userEmailDisplay {
+                    font-weight: 600;
+                    color: #333;
+                }
+
+                .vpadmin-confirm-dialog {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10001;
+                }
+
+                .vpadmin-confirm-content {
+                    background: white;
+                    padding: 24px;
+                    border-radius: 8px;
+                    width: 90%;
+                    max-width: 400px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                }
+
+                .vpadmin-confirm-content h3 {
+                    margin: 0 0 16px 0;
+                    font-size: 18px;
+                    color: #333;
+                }
+
+                .vpadmin-confirm-content p {
+                    margin: 0 0 20px 0;
+                    color: #666;
+                    font-size: 14px;
+                    line-height: 1.5;
+                }
+
+                .vpadmin-confirm-buttons {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 12px;
+                }
+
+                .vpadmin-confirm-buttons button {
+                    padding: 8px 20px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: all 0.2s;
+                }
+
+                .vpadmin-confirm-no:hover {
+                    background: #f1f1f1;
+                    border-color: #ccc;
+                }
+
+                .vpadmin-help-dialog {
+                    z-index: 10002;
+                }
+
+                .vpadmin-help-dialog .vpadmin-modal-content {
+                    width: 90%;
+                    max-width: 800px;
+                    height: 80vh;
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .vpadmin-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 16px;
+                    border-bottom: 1px solid #eee;
+                }
+
+                .vpadmin-modal-body {
+                    flex: 1;
+                    padding: 0;
+                    overflow: hidden;
+                }
+
+                .vpadmin-help-iframe {
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                }
+
+                .vpadmin-confirm-header {
+                    margin-bottom: 16px;
+                }
+
+                .vpadmin-confirm-body {
+                    margin-bottom: 24px;
+                }
+
+                .vpadmin-confirm-footer {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                }
+
+                .vpadmin-confirm-yes,
+                .vpadmin-confirm-no {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    width: 100%;
+                    padding: 12px;
+                    border-radius: 4px;
+                    font-weight: 600;
+                    transition: all 0.2s;
+                }
+
+                .vpadmin-confirm-yes {
+                    background-color: #67c23a;
+                    color: white;
+                    border: none;
+                }
+
+                .vpadmin-confirm-yes:hover {
+                    background-color: #85ce61;
+                }
+
+                .vpadmin-confirm-no {
+                    background-color: #f56c6c;
+                    color: white;
+                    border: none;
+                }
+
+                .vpadmin-confirm-no:hover {
+                    background-color: #f78989;
+                }
+
+                .vpadmin-copy-button,
+                .vpadmin-help-button {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 1px 2px;
+                    border: 1px solid #dcdfe6;
+                    border-radius: 4px;
+                    background-color: white;
+                    color: #606266;
+                    transition: all 0.2s;
+                    font-size: 14px;
+                    width: 60px;
+                }
+
+                .vpadmin-copy-button:hover,
+                .vpadmin-help-button:hover {
+                    background-color: #f5f7fa;
+                    border-color: #c6e2ff;
+                    color: #409eff;
+                }
+
+                .vpadmin-copy-button svg,
+                .vpadmin-help-button svg {
+                    stroke: currentColor;
+                }
+
+                @media (max-width: 480px) {
+                    .vpadmin-pro-dialog-content {
+                        width: 95%;
+                        margin: 10px;
+                    }
+
+                    .vpadmin-iframe-container {
+                        height: 400px;
+                    }
+
+                    .vpadmin-user-guide {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 8px;
+                    }
+
+                    .vpadmin-confirm-content {
+                        margin: 20px;
+                        padding: 16px;
+                    }
+
+                    .vpadmin-confirm-buttons {
+                        flex-direction: column;
+                    }
+
+                    .vpadmin-confirm-buttons button {
+                        width: 100%;
+                    }
+
+                    .vpadmin-help-dialog .vpadmin-modal-content {
+                        width: 95%;
+                        height: 90vh;
+                    }
+
+                    .vpadmin-confirm-footer {
+                        gap: 8px;
+                    }
+
+                    .vpadmin-confirm-yes,
+                    .vpadmin-confirm-no {
+                        padding: 10px;
+                        font-size: 14px;
+                    }
+                }
+            `;
+        document.head.appendChild(style);
+        const iframe = dialog.querySelector('#paymentIframe');
+        const loadingOverlay = dialog.querySelector('#loadingOverlay');
+        iframe.onload = function() {
+            loadingOverlay.style.display = 'none';
+        };
+
+        // 添加事件处理
+        button.addEventListener('click', () => {
+            const token = localStorage.getItem('accessToken');
+            if (finalConfig.needLogin === 'true' && !token) {
+                console.log('Please use admin mode');
+                return;
+            }
+
+            if(finalConfig.needLogin === 'true'){
+                const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+                const userEmail = userInfo.user.email;
+                document.getElementById('userEmailDisplay').textContent = userEmail;
+            }
+
+            if (finalConfig.paymentType.toLowerCase() === 'donation') {
+                const iframe = document.getElementById('paymentIframe');
+                iframe.src = `${finalConfig.iframeUrl}?timestamp=${Date.now()}`;
+                dialog.style.display = 'block';
+                loadingOverlay.style.display = 'flex';
+            } else if (finalConfig.paymentType.toLowerCase() === 'shop') {
+                const width = 800;
+                const height = 600;
+                const left = (window.screen.width - width) / 2;
+                const top = (window.screen.height - height) / 2;
+                const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+                window.open(finalConfig.iframeUrl, 'ShopPaymentWindow', features);
+            }
+        });
+
+
+        // 添加关闭对话框的处理
+        const closeButton = dialog.querySelector('.vpadmin-pro-dialog-close');
+        closeButton.addEventListener('click', () => {
+            dialog.style.display = 'none';
+        });
+        // 添加到指定容器
+        finalConfig.container.appendChild(button);
+        document.body.appendChild(dialog);
+
+        return {
+            button,
+            dialog,
+            show: () => dialog.style.display = 'block',
+            hide: () => dialog.style.display = 'none'
+        };
+    }
     function initUpgradeButtons() {
         const containers = document.querySelectorAll('.vpadmin-upgrade-container');
         containers.forEach(container => {
@@ -271,11 +743,7 @@
         });
     }
 
-    window.addEventListener('vpadminInitialized', initUpgradeButtons);
-
-    if (window.createUpgradeButton) {
-        initUpgradeButtons();
-    }
+    initUpgradeButtons();
 </script>
 
 
